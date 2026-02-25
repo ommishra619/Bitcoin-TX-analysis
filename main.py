@@ -1,9 +1,20 @@
-from data_fetcher import get_address_info
-from bitcoin_basics import summarize_address
-address=input ("Enter bitcoin address:")
-info=get_address_info(address)
-summary=summarize_address(info)
+from data_fetcher import get_address_txs
+from transaction_parser import parse_transaction
 
-print("\n------WALLET SUMMARY-----")
-for key, value in summary.items():
-     print(f"{key}: {value}")
+address = input("Enter Bitcoin address: ")
+
+txs = get_address_txs(address)
+
+print("\n--- First Transaction Analysis ---")
+
+if txs:
+    parsed = parse_transaction(txs[0])
+    print("TXID:", parsed["txid"])
+
+    print("\nInputs:")
+    for i in parsed["inputs"]:
+        print(i)
+
+    print("\nOutputs:")
+    for o in parsed["outputs"]:
+        print(o)
