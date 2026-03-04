@@ -3,6 +3,7 @@ from data_fetcher import get_address_txs
 from transaction_parser import parse_transaction
 from heuristics import classify_transaction
 from graph_engine import build_transaction_graph, degree_centrality
+from heuristics import classify_behavior
 from intelligence import compute_risk_score
 
 
@@ -53,6 +54,10 @@ else:
     classification = "No transactions to classify"
 
 print("\nBehavior Pattern:", classification)
+print("\nAggregated Behavior Patterns:")
+patterns = classify_behavior(parsed_transactions)
+for p in patterns:
+    print("-", p)
 centrality = degree_centrality(G)
 
 sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)

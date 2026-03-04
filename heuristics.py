@@ -113,3 +113,89 @@ def detect_peeling_chains(parsed_txs, min_length=3, drop_ratio=0.6):
                 chains.append({'chain': chain, 'length': len(chain), 'start_tx': txid})
 
     return chains
+
+
+def classify_behavior(parsed_txs):
+    """Aggregate behavior classification for an address based on parsed txs.
+
+    Returns a list of detected behavior labels (strings).
+    """
+    labels = []
+    if not parsed_txs:
+        return labels
+
+    total_txs = len(parsed_txs)
+    total_inputs = sum(len(tx.get('inputs', [])) for tx in parsed_txs)
+    total_outputs = sum(len(tx.get('outputs', [])) for tx in parsed_txs)
+    avg_inputs = total_inputs / total_txs if total_txs else 0
+    avg_outputs = total_outputs / total_txs if total_txs else 0
+
+    # Many small outputs -> possible mixer/tumbler
+    small_output_tx_count = 0
+    equal_outputs_tx_count = 0
+    dusting_count = 0
+    big_incoming = 0
+
+    for tx in parsed_txs:
+        outs = [o.get('value', 0) for o in tx.get('outputs', [])]
+        if not outs:
+            continue
+        if max(outs) < 0.001 and len(outs) > 5:
+            small_output_tx_count += 1
+        unique_vals = set(outs)
+        if len(outs) >= 3 and len(unique_vals) == 1:
+            equal_outputs_tx_count += 1
+        # dusting: many tiny outputs to many recipients
+        tiny_outputs = [v for v in outs if v > 0 and v < 0.00001]
+        if len(tiny_outputs) >= 3:
+            dusting_count += 1
+        # incoming large
+        for o in tx.get('outputs', []):
+            if o.get('value', 0) >= 5:
+                big_incoming += 1
+
+    if small_output_tx_count > max(1, total_txs * 0.05):
+        labels.append('Possible mixer/tumbler')
+    if equal_outputs_tx_count > 0:
+        labels.append('Possible CoinJoin')
+    if dusting_count > 0:
+        labels.append('Possible dusting attack')
+    if big_incoming > 0:
+        labels.append('Large deposits (exchange/hot wallet)')
+
+    # consolidation: many inputs into single output
+    consolidation_count = 0
+    for tx in parsed_txs:
+        if len(tx.get('inputs', [])) >= 4 and len(tx.get('outputs', [])) <= 2:
+            consolidation_count += 1
+    if consolidation_count > max(1, total_txs * 0.02):
+        labels.append('UTXO consolidation')
+
+    # frequent small recurring payments -> subscription/merchant
+    recipients = {}
+    for tx in parsed_txs:
+        for o in tx.get('outputs', []):
+            addr = o.get('address')
+            if not addr:
+                continue
+            recipients.setdefault(addr, 0)
+            recipients[addr] += 1
+    top_recipients = sorted(recipients.items(), key=lambda x: x[1], reverse=True)
+    if top_recipients and top_recipients[0][1] > max(3, total_txs * 0.1):
+        labels.append('Recurring payments to single recipient (merchant/subscription)')
+
+    # classify based on averages
+    if avg_inputs > 3 and avg_outputs <= 2:
+        labels.append('Likely consolidation/coin management')
+    if avg_outputs > 6:
+        labels.append('Batch payouts (exchange or payroll)')
+
+    # peeling chains
+    peeling = detect_peeling_chains(parsed_txs, min_length=3, drop_ratio=0.7)
+    if peeling:
+        labels.append(f'Peeling chain detected ({len(peeling)} chains)')
+
+    if not labels:
+        labels.append('Normal/Unclassified')
+
+    return labels
