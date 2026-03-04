@@ -60,3 +60,52 @@ Output includes a behavior summary, risk score (0-100), and `graph.png` if visua
 ---
 
 If you'd like, I can: add unit tests, a small web API, or a demo notebook showing end-to-end analysis for a sample address.
+
+## Example Output
+
+Below is a sample run of the tool for a single Bitcoin address. The CLI prints a short transaction analysis, aggregated behavior patterns, a risk score with reasons, and saves a graph image (`graph.png`).
+
+```text
+--- First Transaction Analysis ---
+TXID: 59895d26d85732c8d8a0ddce5f79021444e0f2cbfad0634d6b16b7e346acf41e
+
+Inputs:
+{'address': 'bc1q73f28vgtaqe2284ln08lakttv5zvnlej448cux', 'value': 0.03108741}
+
+Outputs:
+{'address': 'bc1qpww362stdn2vqsucq34kpnup389n36r5wjhd66', 'value': 0.01681408}
+{'address': 'bc1q73f28vgtaqe2284ln08lakttv5zvnlej448cux', 'value': 0.01427051}
+
+Graph Stats:
+Nodes: 42
+Edges: 42
+
+Behavior Pattern: Simple payment (Possible change)
+
+Aggregated Behavior Patterns:
+- Recurring payments to single recipient (merchant/subscription)
+
+Top Connected Addresses:
+bc1q73f28vgtaqe2284ln08lakttv5zvnlej448cux 0.4634
+bc1qz2mwg4ws5xxjfy52xjeclmhfx23eu7k74ls4r4 0.3415
+bc1qmzjtf6tq7zv6gk4uuxv4ldae79ky9dd9uswtra 0.1951
+
+Computing risk score...
+Risk score: 20
+Reasons:
+- Exchange-like batch transactions detected
+- Moderate graph centrality
+Breakdown:
+balance: -0.32931298
+incoming_total: 0.31698914
+outgoing_total: 0.30692688
+max_tx_value: 0.04885031
+unique_counterparties: 17
+tx_count: 25
+classifications: {'Simple payment (Possible change)': 15, 'Unclassified / Normal': 4, 'Possible exchange batch': 1}
+peeling_chains_count: 0
+peeling_chains: []
+
+Graph image saved to graph.png
+```
+
