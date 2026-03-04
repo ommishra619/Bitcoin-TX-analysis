@@ -74,3 +74,103 @@ def degree_centrality(G):
             counts[v] += 1
 
     return {node: counts.get(node, 0) / (n - 1) for node in nodes}
+
+
+def betweenness_centrality(G):
+    """Compute betweenness centrality for nodes in G.
+
+    Uses networkx if available; otherwise falls back to an unweighted
+    Brandes algorithm implementation for our simple graph.
+    """
+    if nx is not None:
+        try:
+            return nx.betweenness_centrality(G)
+        except Exception:
+            pass
+
+    # Fallback Brandes algorithm (unweighted, directed)
+    nodes = G.nodes()
+    centrality = {v: 0.0 for v in nodes}
+    adj = getattr(G, "_adj", {})
+
+    for s in nodes:
+        # single-source shortest-paths (BFS)
+        stack = []
+        predecessors = {w: [] for w in nodes}
+        sigma = dict.fromkeys(nodes, 0.0)  # number of shortest paths
+        dist = dict.fromkeys(nodes, -1)
+
+        sigma[s] = 1.0
+        dist[s] = 0
+        from collections import deque
+
+        Q = deque()
+        Q.append(s)
+
+        while Q:
+            v = Q.popleft()
+            stack.append(v)
+            for w, _ in adj.get(v, []):
+                if dist[w] < 0:
+                    dist[w] = dist[v] + 1
+                    Q.append(w)
+                if dist[w] == dist[v] + 1:
+                    sigma[w] += sigma[v]
+                    predecessors[w].append(v)
+
+        # accumulation
+        delta = dict.fromkeys(nodes, 0.0)
+        while stack:
+            w = stack.pop()
+            for v in predecessors.get(w, []):
+                if sigma[w] != 0:
+                    delta_v = (sigma[v] / sigma[w]) * (1.0 + delta[w])
+                    delta[v] += delta_v
+            if w != s:
+                centrality[w] += delta[w]
+
+    # normalization for directed graphs similar to networkx default
+    n = len(nodes)
+    if n > 2:
+        scale = 1.0 / ((n - 1) * (n - 2))
+        for v in centrality:
+            centrality[v] *= scale
+
+    return centrality
+
+
+def node_connectivity(G):
+    """Estimate node connectivity for G.
+
+    Uses networkx if available; otherwise returns a simple approximation
+    (the minimum undirected degree) which is an upper bound on node
+    connectivity but is cheap to compute.
+    """
+    if nx is not None:
+        try:
+            return nx.node_connectivity(G)
+        except Exception:
+            pass
+
+    nodes = G.nodes()
+    if not nodes:
+        return 0
+
+    # build undirected neighbor sets from adjacency
+    neighbors = {n: set() for n in nodes}
+    adj = getattr(G, "_adj", {})
+    for u, outs in adj.items():
+        for v, _ in outs:
+            neighbors.setdefault(u, set()).add(v)
+            neighbors.setdefault(v, set()).add(u)
+
+    # nodes that are isolated or missing in adjacency
+    for n in nodes:
+        neighbors.setdefault(n, set())
+
+    degrees = [len(neighbors[n]) for n in nodes]
+    if not degrees:
+        return 0
+
+    # minimum degree is an upper bound on node connectivity
+    return min(degrees)

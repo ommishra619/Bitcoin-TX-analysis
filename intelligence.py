@@ -3,7 +3,7 @@ from collections import Counter
 from data_fetcher import get_address_info, get_address_txs
 from bitcoin_basics import summarize_address as _summarize_address
 from transaction_parser import parse_transaction
-from heuristics import classify_transaction
+from heuristics import classify_transaction, detect_peeling_chains
 from graph_engine import build_transaction_graph, degree_centrality
 
 
@@ -155,6 +155,18 @@ def compute_risk_score(address, parsed_txs=None):
     classifications = classify_transactions(parsed_txs)
     counts = classifications.get("counts", {})
 
+    # peeling chain detection
+    try:
+        chains = detect_peeling_chains(parsed_txs, min_length=3, drop_ratio=0.6)
+    except Exception:
+        chains = []
+
+    if chains:
+        # add up to 30 points depending on number of chains (capped)
+        chain_score = min(30, 10 * len(chains))
+        score += chain_score
+        reasons.append(f"{len(chains)} peeling chains detected (+{chain_score})")
+
     if counts.get("Possible CoinJoin (Equal outputs)"):
         score += 15
         reasons.append("CoinJoin-like outputs detected")
@@ -200,6 +212,8 @@ def compute_risk_score(address, parsed_txs=None):
         "unique_counterparties": total_counterparties,
         "tx_count": tx_count,
         "classifications": counts,
+        "peeling_chains_count": len(chains),
+        "peeling_chains": chains,
     }
 
     return {"score": score, "reasons": reasons, "breakdown": breakdown}

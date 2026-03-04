@@ -8,7 +8,7 @@ from intelligence import compute_risk_score
 
 parser = argparse.ArgumentParser(description="Bitcoin TX analysis CLI")
 parser.add_argument("address", nargs="?", help="Bitcoin address to analyze")
-parser.add_argument("--risk", action="store_true", help="Compute risk score")
+parser.add_argument("--no-graph", action="store_true", help="Don't attempt to render/save graph image")
 args = parser.parse_args()
 
 if args.address:
@@ -61,13 +61,23 @@ print("\nTop Connected Addresses:")
 for addr, score in sorted_nodes[:5]:
     print(addr, score)
 
-if args.risk:
-    print("\nComputing risk score...")
-    risk = compute_risk_score(address, parsed_transactions)
-    print("Risk score:", risk.get("score"))
-    print("Reasons:")
-    for r in risk.get("reasons", []):
-        print("-", r)
-    print("Breakdown:")
-    for k, v in risk.get("breakdown", {}).items():
-        print(f"{k}: {v}")
+print("\nComputing risk score...")
+risk = compute_risk_score(address, parsed_transactions)
+print("Risk score:", risk.get("score"))
+print("Reasons:")
+for r in risk.get("reasons", []):
+    print("-", r)
+print("Breakdown:")
+for k, v in risk.get("breakdown", {}).items():
+    print(f"{k}: {v}")
+
+# Use the dedicated visualize helper for nicer output
+if not args.no_graph:
+    try:
+        from visualize import draw_transaction_graph
+        outpath = draw_transaction_graph(G, outpath='graph.png', top_n=6)
+        print(f"Graph image saved to {outpath}")
+    except Exception as e:
+        print("Graph rendering skipped:", str(e))
+else:
+    print("Graph rendering was skipped by flag --no-graph")
