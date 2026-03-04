@@ -1,9 +1,20 @@
+import argparse
 from data_fetcher import get_address_txs
 from transaction_parser import parse_transaction
 from heuristics import classify_transaction
 from graph_engine import build_transaction_graph, degree_centrality
+from intelligence import compute_risk_score
 
-address = input("Enter Bitcoin address: ")
+
+parser = argparse.ArgumentParser(description="Bitcoin TX analysis CLI")
+parser.add_argument("address", nargs="?", help="Bitcoin address to analyze")
+parser.add_argument("--risk", action="store_true", help="Compute risk score")
+args = parser.parse_args()
+
+if args.address:
+    address = args.address
+else:
+    address = input("Enter Bitcoin address: ")
 
 
 txs = get_address_txs(address)
@@ -49,3 +60,14 @@ sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
 print("\nTop Connected Addresses:")
 for addr, score in sorted_nodes[:5]:
     print(addr, score)
+
+if args.risk:
+    print("\nComputing risk score...")
+    risk = compute_risk_score(address, parsed_transactions)
+    print("Risk score:", risk.get("score"))
+    print("Reasons:")
+    for r in risk.get("reasons", []):
+        print("-", r)
+    print("Breakdown:")
+    for k, v in risk.get("breakdown", {}).items():
+        print(f"{k}: {v}")
