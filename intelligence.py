@@ -3,7 +3,7 @@ from collections import Counter
 from data_fetcher import get_address_info, get_address_txs
 from bitcoin_basics import summarize_address as _summarize_address
 from transaction_parser import parse_transaction
-from heuristics import classify_transaction, detect_peeling_chains
+from heuristics import classify_transaction, detect_peeling_chains, extract_behavior_signals
 from graph_engine import build_transaction_graph, degree_centrality
 
 
@@ -15,9 +15,9 @@ def summarize_address(address):
 
 def parse_transactions(address, limit=100):
     """Fetch and parse up to `limit` transactions for `address`."""
-    txs = get_address_txs(address)
+    txs = get_address_txs(address, max_txs=limit)
     parsed = []
-    for tx in txs[:limit]:
+    for tx in txs:
         parsed.append(parse_transaction(tx))
     return parsed
 
@@ -179,6 +179,47 @@ def compute_risk_score(address, parsed_txs=None):
         score += 6
         reasons.append("UTXO consolidation patterns detected")
 
+    if counts.get("Fan-out distribution"):
+        score += 8
+        reasons.append("Fan-out distribution transactions detected")
+
+    if counts.get("Fan-in consolidation"):
+        score += 8
+        reasons.append("Fan-in consolidation transactions detected")
+
+    if counts.get("High-fee spend"):
+        score += 8
+        reasons.append("High-fee transaction pattern detected")
+
+    if counts.get("Self-churn / change-heavy"):
+        score += 6
+        reasons.append("Self-churn / change-heavy behavior detected")
+
+    signals = extract_behavior_signals(parsed_txs)
+    if signals.get("high_fee_count", 0) > max(1, len(parsed_txs) * 0.05):
+        score += 8
+        reasons.append("Frequent high-fee transactions")
+
+    if signals.get("fan_out_count", 0) > max(1, len(parsed_txs) * 0.03):
+        score += 6
+        reasons.append("Repeated fan-out payout behavior")
+
+    if signals.get("fan_in_count", 0) > max(1, len(parsed_txs) * 0.03):
+        score += 6
+        reasons.append("Repeated fan-in aggregation behavior")
+
+    if signals.get("self_churn_count", 0) > max(1, len(parsed_txs) * 0.06):
+        score += 5
+        reasons.append("Repeated self-churn detected")
+
+    if signals.get("dusting_count", 0) > 0:
+        score += 7
+        reasons.append("Dust-like tiny output patterns detected")
+
+    if signals.get("reused_output_addresses", 0) > max(3, len(parsed_txs) * 0.05):
+        score += 4
+        reasons.append("High output address reuse detected")
+
     # Graph centrality: if this address is highly central, raise risk
     try:
         G = build_graph(parsed_txs)
@@ -212,6 +253,7 @@ def compute_risk_score(address, parsed_txs=None):
         "unique_counterparties": total_counterparties,
         "tx_count": tx_count,
         "classifications": counts,
+        "signals": signals,
         "peeling_chains_count": len(chains),
         "peeling_chains": chains,
     }

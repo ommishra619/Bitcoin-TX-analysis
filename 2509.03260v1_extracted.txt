@@ -1,0 +1,895 @@
+HyPV-LEAD: Proactive Early-Warning of
+Cryptocurrency Anomalies through Data-Driven
+Structural–Temporal Modeling
+Minjung Park
+Department of Business Administration
+Kumoh National Institute of Technology
+Gumi, Republic of Korea
+mjpark@kumoh.ac.kr
+Gyuyeon Na
+AI and Business Analytics
+Ewha Womans University
+Seoul, Republic of Korea
+amy-na@ewha.ac.kr
+Soyoun Kim
+AI and Business Analytics
+Ewha Womans University
+Seoul, Republic of Korea
+sykim07@ewha.ac.kr
+Sunyoung Moon
+AI and Business Analytics
+Ewha Womans University
+Seoul, Republic of Korea
+sunyoung.moon5621@gmail.com
+HyeonJeong Cha
+AI and Business Analytics
+Ewha Womans University
+Seoul, Republic of Korea
+hyeonjeong.cha@ewha.ac.kr
+Sangmi Chai
+AI and Business Analytics
+Ewha Womans University, Coretrustlink
+Seoul, Republic of Korea
+smchai@ewha.ac.kr
+Abstract—Abnormal cryptocurrency transactions—such as
+mixing services, fraudulent transfers, and pump-and-dump op-
+erations—pose escalating risks to financial integrity but re-
+main notoriously difficult to detect due to class imbalance,
+temporal volatility, and complex network dependencies. Exist-
+ing approaches are predominantly model-centric and post hoc,
+flagging anomalies only after they occur and thus offering
+limited preventive value. This paper introduces HyPV-LEAD
+(Hyperbolic Peak–V alley Lead-time Enabled Anomaly Detection), a
+data-driven early-warning framework that explicitly incorporates
+lead time into anomaly detection. Unlike prior methods, HyPV-
+LEAD integrates three innovations: (i) window–horizon modeling
+to guarantee actionable lead-time alerts, (ii) Peak–Valley (PV)
+sampling to mitigate class imbalance while preserving tempo-
+ral continuity, and (iii) hyperbolic embedding to capture the
+hierarchical and scale-free properties of blockchain transaction
+networks. Empirical evaluation on large-scale Bitcoin transaction
+data demonstrates that HyPV-LEAD consistently outperforms
+state-of-the-art baselines, achieving a PR-AUC of 0.9624 with
+significant gains in precision and recall. Ablation studies fur-
+ther confirm that each component—PV sampling, hyperbolic
+embedding, and structural–temporal modeling—provides com-
+plementary benefits, with the full framework delivering the
+highest performance. By shifting anomaly detection from reactive
+classification to proactive early-warning, HyPV-LEAD establishes
+a robust foundation for real-time risk management, anti-money
+laundering (AML) compliance, and financial security in dynamic
+blockchain environments.
+Index Terms—cryptocurrency anomaly detection, early warn-
+ing, hyperbolic embedding, peak–valley sampling
+I. I NTRODUCTION
+Cryptocurrencies have rapidly emerged as a disruptive ele-
+ment in global financial markets, attracting both institutional
+and individual investors through the potential for high returns
+and the innovative foundation of blockchain technology [1].
+In contrast to traditional financial instruments such as stocks
+or bonds, cryptocurrency markets exhibit short-term volatility
+and heightened sensitivity to external influences, including reg-
+ulatory actions, fraudulent activities, and speculative trading
+practices [2]. These features make the market vulnerable to
+abnormal activities including coin mixing, fraudulent transfers,
+and pump-and-dump operations, which undermine market
+integrity and raise major concerns for regulators and investors
+alike [3].
+Therefore, detecting such abnormal activities is of critical
+importance to prevent social and financial losses, yet several
+challenges remain. First, illicit transactions are extremely rare
+compared to the overwhelming number of legitimate ones,
+resulting in a severe class imbalance that makes effective
+classification difficult when relying solely on traditional ma-
+chine learning methods [4]. Second, blockchain transaction
+data are inherently temporal and relational: anomalies do not
+occur as isolated events but emerge from evolving transaction
+sequences and complex address-to-address interactions [5].
+Hence, incorporating temporal features is essential; however,
+due to the continuous, second-level trading nature of cryp-
+tocurrencies without market closure, it is difficult to adequately
+capture stable temporal patterns. Third, as the cryptocurrency
+market rapidly diversifies and its complexity deepens, new
+forms of manipulation continue to emerge; however, existing
+detection models often struggle to effectively capture these
+evolving patterns [6].
+As a result, conventional model-centric post hoc approaches,
+in which anomalies are identified only after they occur, offer
+limited preventive value. In practice, such methods often issue
+alerts too late, leaving regulators and investors without suffi-
+cient time for proactive intervention. Furthermore, traditional
+sampling methods distort temporal continuity, and Euclidean
+embeddings fail to preserve the hierarchical and scale-free
+arXiv:2509.03260v1  [cs.LG]  3 Sep 2025
+
+properties of transaction etworks [7], [8], thereby reducing
+robustness in real-world applications.
+To address these challenges, this study introduces HyPV-
+LEAD (Hyperbolic Peak–Valley Lead-time Enabled Anomaly
+Detection), a novel data-driven early-warning framework.
+Rather than merely increasing algorithmic complexity, the pro-
+posed approach leverages the intrinsic properties of blockchain
+data to secure actionable lead time for intervention. Specif-
+ically, HyPV-LEAD integrates three core components: (i)
+window–horizon modeling to guarantee lead-time detection,
+(ii) Peak–Valley (PV) sampling to mitigate class imbalance
+while preserving temporal bursts, and (iii) hyperbolic embed-
+ding to capture the hierarchical and clustered structures of
+transaction networks.
+In summary, HyPV-LEAD advances beyond conventional
+post hoc models by enabling reliable lead-time prediction
+through the joint integration of temporal continuity, structural
+hierarchy, and volatility-sensitive peak–valley patterns. Fur-
+thermore, this study demonstrates through empirical valida-
+tion on large-scale data that it consistently outperforms both
+sequential-only and structure-only baselines, underscoring its
+potential as a robust foundation for proactive risk management
+in cryptocurrency markets.
+II. P ROBLEM STATEMENT
+The detection of abnormal cryptocurrency transactions—
+such as mixing services, fraudulent schemes, or pump-and-
+dump operations—remains a difficult challenge in blockchain
+research. These events are extremely rare, occur within highly
+imbalanced datasets, and are shaped by both the evolving
+temporal behavior of transactions and the intricate network
+of address-to-address relations. Their scarcity and complexity
+make reliable identification difficult, especially in environ-
+ments that demand real-time responses. This study defines the
+following key research problems.
+A. Moving from Model-Centric Forecasting to Data-Driven
+Early Warning
+Most prior work has concentrated on event forecasting
+within a fixed prediction window. While such approaches
+can classify whether an anomaly will occur, they usually
+operate after the fact, offering little value for preventive action.
+The absence of guaranteed lead time means that exchanges,
+regulators, or investors often learn about irregular behavior
+only once it has already materialized.
+Another limitation lies in the model-centric orientation of
+earlier studies. Considerable effort has been devoted to refining
+algorithms, yet relatively little attention has been given to the
+inherent features of blockchain data itself. Without integrating
+those characteristics, existing methods often fail to produce
+early and actionable warning signals.
+To overcome this, our study adopts an early-warning per-
+spective, shifting the focus from algorithmic complexity to-
+ward data properties that can generate proactive alerts. Within
+this framework, the problem is formulated as identifying an
+optimal pairing of observation window ( w) and lead-time
+horizon ( h), such that potential anomalies can be recognized
+h minutes before the actual event occurrence at tevent:
+talert = tevent − h (1)
+This formulation enables the design of detection systems
+that not only classify anomalies correctly but also provide a
+margin of time for intervention.
+ˆytevent−h = Pr
+ 
+ytevent = 1 | X1:(tevent−h)
+
+(2)
+Here, X1:(tevent−h) denotes the transaction history up to time
+tevent − h. This probabilistic formulation enables the detection
+of abnormal signals in advance of the actual event, thereby
+providing actionable lead time for preventive risk control.
+B. Imbalance and Temporal Continuity
+Another major obstacle is the severe imbalance between or-
+dinary and suspicious transactions. Na¨ıve resampling methods,
+such as random oversampling or undersampling, tend to distort
+the sequential flow of trades and thus erase critical temporal
+cues. To mitigate this issue, we introduce Peak–Valley (PV)
+sampling, which balances the dataset while preserving local
+bursts and lulls in activity. By maintaining these volatility
+intervals, PV sampling reduces imbalance without losing the
+time-series dependencies essential for anomaly detection.
+C. Joint Structural–Temporal Representation
+We propose HyPV-LEAD , a hybrid framework designed
+to jointly capture the structural and temporal properties
+of cryptocurrency transaction networks. Unlike conventional
+Euclidean embeddings, which struggle to model power-law
+degree distributions and deep hierarchical relations, HyPV-
+LEAD leverages hyperbolic embedding to preserve the hi-
+erarchical and clustered organization inherent in blockchain
+networks. This allows the model to more accurately represent
+complex address interactions within large-scale transaction
+graphs. In addition, HyPV-LEAD incorporates Peak–Valley
+(PV) sampling to address the severe class imbalance com-
+mon in anomaly detection tasks while maintaining tempo-
+ral continuity. By preserving local volatility intervals within
+transaction sequences, PV sampling ensures that fluctuations
+critical to anomaly detection are retained. The integration of
+hyperbolic representation learning with PV sampling provides
+a more robust foundation for early-warning anomaly detection,
+enabling the system to deliver reliable alerts even under highly
+imbalanced and dynamic blockchain environments.
+III. R ELATED WORKS
+Cryptocurrency transactions display a variety of abnormal
+behaviors, and each type poses different challenges for de-
+tection. One of the most representative type of abnormal
+transaction is coin mixing. Its transaction flows are delib-
+erately hidden by combining inputs and outputs from many
+users. The CoinJoin protocol, which is widely implemented
+in the Wasabi Wallet, illustrates this tension—it strengthens
+anonymity but has also been misused for money laundering,
+
+which complicates the identification of suspicious activity [9],
+[10]. Phishing accounts often scatter funds through long chains
+of intermediary addresses, while pump-and-dump operations
+cause abrupt spikes in price and trading volume that can
+look very similar to ordinary market behavior [11], [12].
+Even though blockchain ledgers are open and transparent by
+design, these practices create concealed transfer routes, sudden
+temporal bursts, and unusual network patterns.
+Prior studies have attempted to address these challenges
+using traditional machine learning models. Random Forests
+and Gradient Boosting, for example, have been applied to
+blockchain transaction records to distinguish legitimate trades
+from suspicious ones [13], [14]. While these models report
+strong classification accuracy, they are largely confined to post-
+event detection: anomalies are flagged only after transactions
+are finalized. This retrospective limitation reduces their effec-
+tiveness for real-time monitoring or proactive early-warning
+systems. Moreover, conventional classifiers face major ob-
+stacles when handling the severe class imbalance inherent
+in blockchain data, where abnormal transactions are vastly
+outnumbered by regular ones [15]. They also fail to adequately
+preserve the sequential continuity of transactions, which weak-
+ens their robustness in live environments.
+In short, existing research has laid groundwork for cryp-
+tocurrency anomaly detection but falls short of addressing
+obfuscation tactics and irregular temporal dynamics. Most
+methods function primarily as diagnostic tools for retrospec-
+tive analysis rather than as forward-looking, real-time detec-
+tion mechanisms. This gap motivates the present work, which
+introduces a framework explicitly designed to handle data
+imbalance, capture temporal dependencies, and deliver timely
+alerts in blockchain transaction networks.
+In summary, existing research has provided a foundation
+for anomaly detection in cryptocurrencies but remains insuffi-
+cient to capture the complexity of obfuscation techniques and
+irregular temporal dynamics. Most approaches function more
+as diagnostic tools for retrospective analysis rather than as
+proactive, real-time detection systems. This gap motivates the
+present study to propose a framework that directly addresses
+class imbalance, temporal dependencies, and the demand for
+timely detection in blockchain transaction networks.
+IV. P ROPOSED METHODOLOGY
+A. Peak–Valley (PV) Sampling for Class Imbalance
+Recent studies have explored advanced strategies to address
+class imbalance, showing promising yet incomplete progress.
+For instance, Kernel Density Estimation (KDE)-based sam-
+pling achieved higher F1-scores and G-mean compared to
+conventional methods [16], and ensembles of Deep Belief
+Networks outperformed SMOTE and random under-sampling
+in terms of accuracy [17]. However, these improvements
+remain largely confined to static benchmarks and do not funda-
+mentally resolve the imbalance challenge in transactional data.
+In particular, they continue to overlook the temporal continuity
+and structural dependencies inherent in blockchain networks.
+As a result, much of the anomaly detection literature in finance
+still relies on widely used imbalance handling techniques such
+as SMOTE, under-sampling, or oversampling [18]–[20], which
+remain insufficient for capturing the dynamics and hierarchical
+organization of real-world transactions.
+In contrast, our work introduces an automated procedure for
+PV) sampling that adapts to the underlying data distribution.
+Specifically, candidate values for the rolling window size ( n),
+the z-score threshold ( zth), and the maximum number of
+events (kmax) are generated to form a search spaceΘ. For each
+configuration θ ∈ Θ, the resampled dataset XPV(θ) is used to
+train a baseline classifier, and the setting that maximizes the
+validation metric of F1-score is selected as optimal:
+θ∗ = arg max
+θ∈Θ
+M
+ 
+f(XPV(θ)), y
+
+, (3)
+where f(·) denotes the classifier and M the evaluation
+metric. Through this design, PV sampling not only addresses
+class imbalance but also adapts to the temporal characteristics
+and volatility of blockchain transactions, providing a stronger
+foundation for anomaly detection.
+B. Hyperbolic Embedding for Structural Representation
+Cryptocurrency transaction networks exhibit hierarchical
+and scale-free characteristics [21]. A limited number of hub
+nodes, such as exchanges or major wallets, dominate the
+majority of flows, whereas peripheral wallets form layered
+structures around them. These networks generally follow a
+power-law degree distribution, where connectivity and trans-
+action volume are concentrated in only a few addresses [22].
+Furthermore, illicit practices including mixing and layering
+introduce hidden dependencies that complicate the learning of
+meaningful representations [6].
+Earlier studies have commonly adopted Euclidean embed-
+ding techniques to represent such networks. Although these
+approaches are relatively simple to implement and widely ap-
+plied, they face inherent difficulties in preserving blockchain-
+specific structural properties. In particular, Euclidean embed-
+dings (i) often distort hierarchical distances, making distinc-
+tions between higher- and lower-level structures unclear [3],
+[23], (ii) over-compress highly connected hub nodes, which
+obscures their different functional roles [5], and (iii) struggle
+to capture heterogeneous multi-level dependencies within a
+linear space [23].
+To address these limitations, our framework incorporates hy-
+perbolic embedding into the representation learning pipeline.
+Due to the exponential expansion of hyperbolic space with
+distance, this approach preserves hierarchical separation, dis-
+tinguishes hub-dominated topologies, and models heteroge-
+neous connectivity patterns. Prior work has demonstrated
+that hyperbolic embeddings outperform Euclidean methods in
+graph-level learning tasks [24]–[26]. Therefore, we employ
+hyperbolic embeddings to better represent the hierarchical and
+scale-free structure of cryptocurrency transaction networks. In
+our design, anomalous transactions are mapped closer to the
+origin and normal transactions toward the boundary of the
+latent manifold, improving class separability. This produces
+
+more discriminative representations of the network and im-
+proves the performance of anomaly detection.
+C. Hybrid Graph–Sequence Learning Framework
+Cryptocurrency transactions exhibit two fundamental de-
+pendencies: structural relations among addresses and tempo-
+ral dynamics. To jointly capture these properties, we pro-
+pose HyPV-LEAD, a hybrid framework that integrates Graph
+Convolutional Networks (GCNs) with LSTM-based sequence
+modeling, augmented by Peak–Valley sampling [16], [17] and
+hyperbolic embedding [24]–[26]. In this design, PV sampling
+mitigates class imbalance while preserving temporal conti-
+nuity, hyperbolic embeddings maintain the hierarchical and
+scale-free structure of blockchain graphs, GCN layers capture
+local and global transaction patterns, and LSTM layers model
+their temporal evolution. Beyond classification accuracy, the
+framework explicitly issues anomaly alerts with guaranteed
+lead time, supporting proactive risk management in blockchain
+systems.
+In implementation, PV sampling is employed to emphasize
+transitions around peaks and valleys, thereby addressing class
+imbalance while maintaining temporal continuity. For each
+observation window, a graph snapshot is constructed where
+nodes represent addresses and directed edges denote transac-
+tion flows. Node and edge features are embedded in hyperbolic
+space and processed by the GCN to extract structural signals.
+The pooled graph embeddings are then ordered sequentially
+and passed to the LSTM to model temporal progression.
+By unifying structural and sequential learning within a hy-
+perbolic representation space, HyPV-LEAD captures the com-
+plex patterns of anomalous cryptocurrency activity, providing
+a robust basis for early detection and timely intervention.
+V. E XPERIMENTAL SETUP
+A. Dataset Description
+This study employs the Binance Bitcoin transaction dataset
+curated by Kloint, which spans from January 1 to December
+31, 2024. The dataset records core transactional attributes
+such as timestamp, receiving and counterparty addresses,
+transaction hash, the transferred value in Bitcoin units, and the
+corresponding amount converted to U.S. dollars. Each entry is
+annotated with a binary label indicating whether it represents
+a normal or abnormal transaction. For the abnormal category,
+we specifically focus on coin-mixing activities, restricting
+our analysis to transactions associated with Wasabi Wallet.
+Labeling was conducted using a predefined list of transaction
+hashes identified as mixing events. Both the dataset and the
+implementation code will be released publicly once the paper
+is accepted.
+B. Data Preprocessing
+The preprocessing began by converting the Date field into
+datetime, removing rows with missing timestamps, and
+sorting the dataset in ascending order of Date. From each
+timestamp, we derived standard calendar components ( year,
+month, day, dayofweek, hour) together with a Unix
+timestamp in seconds. To capture short-horizon temporal
+dynamics, we constructed the inter-arrival time (delta_t) as
+the difference between consecutive timestamps, the percent-
+age change of USD Value (usd_change) with infinities
+mapped to zero, and rolling statistics of USD Value over
+a five-step window ( usd_roll_mean, usd_roll_std).
+Address-wise activity was represented by the cumulative
+number of transactions observed up to the current record
+for both receiving and counterparty addresses ( recv_freq,
+send_freq).
+For value-related enrichment, additional features were
+introduced, including log-transformed amounts ( log_usd
+= log(1 + USD Value) ), normalized ratios relative to
+the daily average ( usd_rel_day), and deviations from
+the address-specific mean ( usd_dev_addr), which provide
+both global and local perspectives of transaction magni-
+tude. Moreover, each transaction value was standardized by
+its address-specific mean and standard deviation to produce
+value_zscore, allowing comparison across heterogeneous
+transaction behaviors. All string-type fields were converted
+into integer codes via label encoding, and remaining missing
+values were filled with zero. This preprocessing and feature
+engineering pipeline integrates temporal variation, structural
+indicators, and normalized transaction magnitudes, thereby
+yielding a robust feature space for anomaly detection in
+cryptocurrency transactions.
+C. Window–Horizon Search
+To evaluate the effect of temporal granularity, we conducted
+a grid search over multiple observation window sizes and pre-
+diction horizons using Random Forest classifier. Specifically,
+the window sizes were chosen from {5, 10, 15, 30, 60} and
+the horizons from {5, 10, 15, 30, 60}. The goal was to identify
+the optimal combination based on the Precision–Recall AUC
+(PR-AUC) metric.
+The grid search results showed that a configuration with
+a 30-minute window and a 5-minute horizon achieved the
+highest PR-AUC score. This setting was therefore selected
+for the main experimental evaluation. Table I presents the
+comparative performance across different parameter combina-
+tions, highlighting the superiority of the 30–5 setting for early-
+warning anomaly detection. This outcome confirms that the
+30–5 configuration represents the optimal trade-off between
+observation length and prediction horizon.
+TABLE I
+EVALUATION RESULTS ACROSS WINDOW –HORIZON PARAMETER SETTINGS
+Window (min)Horizon (min)AccuracyRecall Precision F1 ROC-AUCPR-AUC30 5 0.9728 0.8982 0.9517 0.9241 0.9659 0.941210 5 0.9675 0.9273 0.8995 0.9132 0.9693 0.938430 10 0.9692 0.8904 0.9393 0.9142 0.9593 0.92855 5 0.9609 0.9310 0.8669 0.8978 0.9695 0.923310 10 0.9637 0.9153 0.8907 0.9028 0.9622 0.9189
+D. Baseline Models
+a) Traditional ML: RF, XGBoost
+In this study, we adopt Random Forest (RF) and eXtreme
+Gradient Boosting (XGBoost, XGB) as traditional machine
+
+learning baselines. Although these models do not explicitly
+incorporate the sequential or structural dependencies of trans-
+action networks, they have consistently demonstrated strong
+performance in financial data analysis and blockchain anomaly
+detection. We configured RF to be trained with 300 decision
+trees without depth constraints in order to capture diverse non-
+linear patterns, while XGBoost was set with 300 estimators,
+a learning rate of 0.05, a maximum depth of 6, a subsample
+ratio of 0.8, and ℓ2 regularization to balance efficiency and
+generalization. Both models employ early stopping based on
+validation F1-score to prevent overfitting, while final test
+performance is evaluated primarily using PR-AUC.
+Recent studies report that RF achieved an F1-score of
+approximately 0.97 on cryptocurrency transaction data [27],
+while XGBoost reached 0.98 [28]. In particular, when com-
+bined with oversampling techniques to alleviate class imbal-
+ance, the performance of XGBoost improved from 0.96 to
+0.98, and RF from 0.94 to 0.97 [4]. These findings indicate that
+RF and XGBoost, despite not modeling temporal or structural
+dependencies directly, remain strong and competitive baselines
+in financial anomaly detection. However, because both operate
+primarily on tabular data, their capacity is inherently limited
+when addressing relational or sequential dependencies. Prior
+research highlights that traditional tabular anomaly detection
+methods often struggle with generalization due to the inability
+to model sample or feature interactions—leading to suboptimal
+detection when complex interdependencies exist [7], [8].
+These observations suggest that while RF and XGBoost
+remain competitive baselines in financial anomaly detection,
+their tabular nature fundamentally limits their ability to capture
+relational and temporal dependencies, underscoring the need
+for models that explicitly integrate structural and sequential
+representations.
+b) Sequential Models: LSTM, GRU
+Sequential deep learning models such as Long Short-Term
+Memory (LSTM) and Gated Recurrent Units (GRU) have
+been widely applied to capture the temporal dependencies of
+cryptocurrency transactions. These models focus on sequential
+dynamics, enabling them to reconstruct normal transaction
+patterns and identify deviations as anomalies [5]. Attention-
+augmented LSTM frameworks have further demonstrated ro-
+bustness under imbalanced data conditions, achieving compet-
+itive F1-scores in fraud detection tasks [29] .
+However, sequential models primarily emphasize tempo-
+ral dependencies while often neglecting the structural re-
+lationships among addresses in transaction networks. Since
+anomalous activities in cryptocurrencies are shaped not only
+by time-evolving behaviors but also by the structural flows
+of assets, relying solely on sequential modeling limits their
+effectiveness. To address this limitation, this study integrates
+structural information into sequential models, ensuring that
+both temporal and relational aspects of transaction networks
+are jointly captured.
+c) Graph-based Models: GCN, GraphSAGE
+Graph-based neural networks such as Graph Convolutional
+Networks (GCNs) and GraphSAGE have been widely adopted
+to capture structural dependencies in relational data, including
+blockchain transaction graphs. GCN has demonstrated strong
+performance in fraud detection tasks by incorporating topolog-
+ical features such as centrality and clustering coefficients [30].
+Similarly, GraphSAGE has shown scalability to large datasets;
+for example, in phishing account detection on Ethereum
+transaction graphs, it achieved high precision, recall, and F1-
+scores [6].
+While these results highlight the effectiveness of graph-
+based approaches, most existing models rely on static graph
+snapshots and therefore fail to reflect the temporal dynamics
+of transaction behaviors [31]. In practice, anomalous patterns
+in cryptocurrency and other relational domains evolve over
+time, and static modeling alone cannot fully capture such
+dynamic dependencies. To address this limitation, the proposed
+framework embeds temporal modeling within graph-based rep-
+resentations, enabling the detection system to jointly capture
+evolving behaviors and their structural contexts.
+d) Hybrid Models: GCN-LSTM
+While sequential models are effective at capturing temporal
+dependencies and graph-based approaches emphasize struc-
+tural patterns, prior studies have shown that each method alone
+provides only a partial view of blockchain transactions. For
+instance, LSTM-based anomaly detection frameworks focus
+on dynamic behaviors but neglect the structural relationships
+among addresses [5], whereas GCN-based fraud detection
+demonstrates strong performance in modeling transaction
+graphs but often lacks sensitivity to temporal variations [30].
+To bridge this gap, hybrid architectures such as GCN-LSTM
+have been proposed. By combining graph convolutional layers
+with recurrent neural units, these models jointly learn both
+structural and temporal features, thereby enhancing anomaly
+detection in cryptocurrency networks. Recent research has
+confirmed that GCN-LSTM outperforms single-modal models
+by effectively capturing the interplay between transaction
+sequences and network topology [32], [33].
+Nevertheless, limitations remain when applying GCN-
+LSTM to cryptocurrency data. Transaction networks are highly
+dynamic, with sudden bursts of abnormal activity that are
+difficult to capture with fixed-length windows. Moreover,
+blockchain graphs are extremely sparse and noisy, where many
+addresses have short lifespans or minimal activity, making it
+challenging for the model to generalize effectively. In addition,
+abnormal transactions are heavily imbalanced compared to
+normal ones, causing hybrid models to suffer from biased
+learning without tailored sampling strategies. Finally, the rapid
+evolution of illicit behaviors—such as mixing services, layer-
+ing, or pump-and-dump schemes—often outpaces the patterns
+learned by static GCN-LSTM frameworks, highlighting the
+need for more adaptive architectures.
+E. Proposed Model
+We implement HyPV-LEAD with a fixed window length
+L = 30 and a fixed early-warning horizon h = 5 , selected
+via validation PR-AUC. The architecture and implementation
+are as follows : (i) Input and graph construction: Let the raw
+
+time series length be N and the window length be L = 30.
+The total number of windows is defined as T =
+ N
+L
+
+, where
+t ∈ 1, . . . , T. For early warning with horizon h = 5, window
+t issues a prediction at time t for an event at time t + h.
+When PV sampling is used for training, peak/valley indices
+I = i1, . . . , iM are first detected on the raw series, and the
+training set TPV is constructed by centering windows at these
+events. For each window t, we build a directed transaction
+graph Gt = ( Vt, Et) with addresses as nodes and flows as
+edges, and derive node and edge features from window-level
+statistics. (ii) Hyperbolic mapping: Features are mapped to
+a Poincar ´e ball with curvature κ < 0 to encode hierarchical
+and hub–periphery structures. (iii) Structural encoder (GCN):
+A graph convolutional encoder produces a structural vector
+gt from Gt. (iv) Temporal encoder (LSTM): The sequence
+(g1, . . . , gt) is fed to an LSTM to obtain a temporal state
+ht that summarizes information available up to time t. (v)
+Detection head: A multilayer perceptron (MLP) maps ht to
+an anomaly score ˆyt+h ∈ [0, 1], implementing the lead-time
+prediction objective:
+ˆyt+h = Pr
+ 
+yt+h = 1
+ g1:t
+
+.
+Training targets and evaluation labels are aligned to yt+h
+so that all metrics quantify early-warning performance at the
+fixed lead time of h = 5 . ormance at a fixed lead time of
+h = 5.
+F . Performance Metrics
+We evaluate detection performance for the positive (anoma-
+lous) class using Accuracy, Precision, Recall, F1-score, ROC-
+AUC (Receiver Operating Characteristic—Area Under the
+Curve), and PR-AUC. Given class imbalance and the practical
+cost of false positives, we adopt PR-AUC as the primary
+evaluation metric. Unlike ROC-AUC, which can remain de-
+ceptively high under severe imbalance due to the dominance
+of true negatives, PR-AUC directly reflects the precision–recall
+trade-off for the positive class. Its random baseline equals
+the positive prevalence π+, so gains are interpretable as lift
+over random and better reflect alert quality; it is threshold-
+agnostic for comparison while enabling selection of an oper-
+ating threshold from the PR curve. Because our goal is early
+warning with a fixed lead time h (rather than mere event
+occurrence detection), predictions are issued at tevent − h and
+labels are temporally aligned to that horizon; accordingly, PR-
+AUC is computed over warning scores at tevent−h. Threshold-
+dependent metrics (Precision, Recall, F1-score, Accuracy) are
+computed at a default decision threshold of 0.5. We apply
+early stopping based on validation PR-AUC, and evaluate
+test performance using the corresponding checkpoint. Results
+are reported as mean ± standard deviation over ten runs.
+To preserve temporal dependencies, we use a chronological
+data split. PR and ROC curves, along with their AUCs, are
+computed over the entire test horizon.
+Threshold-dependent metrics (Precision, Recall, F1-score,
+Accuracy) are computed at a default decision threshold of 0.5.
+We apply early stopping based on validation PR-AUC, and
+evaluate test performance using the corresponding checkpoint.
+Results are reported as mean ± standard deviation over
+ten runs. To preserve temporal dependencies, we employ a
+chronological data split. Precision–Recall (PR) and Receiver
+Operating Characteristic (ROC) curves, together with their
+corresponding AUC values, are computed over the entire test
+horizon.
+VI. R ESULTS
+A. Overall Performance Comparison
+The results indicates differences across traditional machine
+learning models, sequential networks, graph-based methods,
+and the hybrid framework we proposed. Traditional machine
+learning models, including RF and XGBoost, often produced
+higher precision, likely influenced by the imbalance in the
+dataset and their bias toward labeling transactions as normal.
+However, this came at the cost of recall and F1-scores, which
+dropped significantly, showing that such models are not well
+suited to detect rare anomalies. XGBoost offered a somewhat
+better balance between precision and recall than RF, but it still
+could not capture the sequential patterns or the structural links
+that are essential in blockchain transaction networks.
+Sequential models such as LSTM and GRU improved
+recall by capturing temporal continuity, suggesting that they
+can partially reflect the evolving dynamics of transaction
+flows. However, their accuracy and PR-AUC did not reach
+competitive levels, implying that temporal information alone
+is insufficient for detecting complex anomalous behaviors.
+More importantly, without incorporating lead-time awareness,
+predictions from these models may occur too close to the
+actual event, offering limited practical value for proactive risk
+management.
+Conversely, graph-based methods including GCN and
+GraphSAGE effectively captured structural dependencies and
+achieved strong precision. Nevertheless, their exclusion of
+temporal dynamics led to weaker overall performance, partic-
+ularly in F1 and PR-AUC. This outcome suggests that relying
+solely on static graph snapshots fails to capture the temporal
+evolution of blockchain transactions.
+By integrating both perspectives, GCN-LSTM achieved
+more balanced outcomes and improved accuracy and ROC-
+AUC over single-model baselines. However, GCN-LSTM still
+lacked mechanisms for emphasizing volatility-driven segments
+or preserving hierarchical structures, which are critical for
+anticipating anomalies in advance.
+The proposed HyPV-LEAD addressed these limitations by
+combining window–horizon sequence modeling, hyperbolic
+embedding to encode hierarchical and hub–periphery struc-
+tures, and PV sampling to emphasize peak/valley dynamics.
+Through this integration, HyPV-LEAD consistently outper-
+formed all baselines, achieving an accuracy of 0.9412, recall
+of 0.9128, and PR-AUC of 0.9624. These results demonstrate
+that meaningful early warning is feasible only when struc-
+tural, temporal, and data-driven sampling strategies are jointly
+considered. Crucially, HyPV-LEAD validates the feasibility of
+lead-time enabled anomaly detection, showing that reliable
+
+alerts can be issued h steps before the actual anomalous event,
+thereby ensuring practical lead time for intervention.
+The overall comparison confirms that HyPV-LEAD delivers
+the most comprehensive improvements across metrics and
+establishes itself as an effective framework for anomaly de-
+tection in dynamic blockchain environments. The detailed
+performance of all models is presented in Table II.
+TABLE II
+OVERALL PERFORMANCE COMPARISON OF MODELS
+Model Accuracy Precision Recall F1 ROC-AUC PR-AUC
+RandomForest 0.9275 0.9678 0.8279 0.8617 0.9493 0.9375
+XGBoost 0.9212 0.9125 0.8962 0.8363 0.9572 0.9206
+LSTM 0.8873 0.8462 0.7815 0.8127 0.9418 0.9134
+GRU 0.8936 0.8527 0.7941 0.8224 0.9449 0.9162
+GCN 0.8495 0.9887 0.8708 0.8379 0.9606 0.9497
+GraphSAGE 0.8619 0.9114 0.8037 0.8542 0.9528 0.9317
+GCN-LSTM 0.9025 0.8902 0.8421 0.8655 0.9512 0.9325
+HyPV-LEAD 0.9412 0.9643 0.9128 0.9378 0.9716 0.9624
+B. Ablation Study
+To assess the relative contribution of each component, we
+performed an ablation study. Specifically, retaining hyperbolic
+embedding while removing PV sampling resulted in a PR-
+AUC of 0.9440, whereas applying PV sampling without hy-
+perbolic embedding yielded 0.9431. Although these values
+exceed the plain GCN-LSTM baseline, both configurations
+underperformed relative to the full system, suggesting that
+neither hyperbolic mapping nor PV sampling is sufficient in
+isolation. Furthermore, using PV sampling alone in Euclidean
+space further reduced performance to 0.9324, indicating that
+emphasizing temporal events without structural or hierarchical
+support limits the ability to generalize beyond local volatility
+patterns.
+The structure-only and temporal-only variants produced PR-
+AUC scores of 0.9342 and 0.9281, respectively. Notably, the
+temporal-only variant exhibited the steepest drop in perfor-
+mance, which highlights that temporal signals, while useful,
+cannot independently sustain predictive power for rare and
+irregular anomalies. This observation emphasizes the neces-
+sity of integrating structural and temporal information in a
+complementary manner to capture the multi-faceted dynamics
+of blockchain transactions.
+In contrast, the proposed HyPV-LEAD, which integrates
+window–horizon based sequence modeling, hyperbolic embed-
+ding for hierarchical structure preservation, and PV sampling
+to emphasize volatility-driven segments, achieved the highest
+PR-AUC of 0.9624. This result demonstrates that the synergy
+among these three components creates more than additive
+effects. By combining structural, temporal, and event-centric
+perspectives, HyPV-LEAD not only improves overall accuracy
+but also validates the feasibility of lead-time enabled anomaly
+detection, providing reliable alerts h steps before the actual
+occurrence of anomalous events. This establishes HyPV-LEAD
+as a robust framework for proactive and practical risk man-
+agement in dynamic blockchain environments.
+TABLE III
+ABLATION STUDY RESULTS
+Model Setting PR-AUC ∆ vs Full
+GCN-LSTM (Baseline) 0.9325 -0.0299
+w/o PV (Hyp + GCN-LSTM) 0.9440 -0.0184
+w/o Hyperbolic (PV + GCN-LSTM) 0.9431 -0.0193
+PV only (Euclid + GCN-LSTM) 0.9324 -0.0300
+Structure-only (PV + Hyp + GCN) 0.9342 -0.0282
+Temporal-only (PV + Hyp + LSTM) 0.9281 -0.0343
+Full HyPV-LEAD 0.9624 +0.0000
+Fig. 1. Ablation Study Results
+The detailed ablation results are summarized in Table III
+and further illustrated in Fig. 1, which provide an intuitive
+comparison across model variants.
+VII. C ONCLUSION
+The detection of abnormal cryptocurrency transactions has
+long been constrained by post hoc, model-oriented approaches
+that identify events only after they occur. While these methods
+have provided incremental technical refinements, they fall
+short in practice: rare anomalies are often missed, temporal
+dynamics are disrupted, and regulators or exchanges receive
+alerts too late to act. In such environments, where transaction
+volumes and manipulation tactics evolve rapidly, what is most
+needed is not another complex classifier but a framework that
+delivers actionable warnings in advance.
+This study addressed that gap through HyPV-LEAD, a
+framework that redefines anomaly detection as a proactive
+early-warning task. By explicitly coupling observation win-
+dows with lead-time horizons, the framework ensures that
+signals of irregular behavior are detected before they fully
+unfold. In parallel, the introduction of PV sampling allows
+the system to handle severe class imbalance without distorting
+temporal continuity, while hyperbolic embeddings preserve
+the hierarchical and clustered nature of blockchain transac-
+tion networks. Together, these elements create a structural–
+temporal representation that is both richer and more robust
+than conventional Euclidean or sequential-only methods.
+Extensive evaluation on large-scale Bitcoin transaction data
+confirmed the effectiveness of this approach. HyPV-LEAD
+consistently outperformed state-of-the-art baselines across ac-
+curacy, recall, and PR-AUC, demonstrating that reliable early-
+warning is not only theoretically possible but practically
+achievable. Ablation studies further showed that each design
+choice contributes meaningfully to the whole, and that only
+
+through their integration can high levels of predictive reliabil-
+ity be sustained in the face of dynamic and imbalanced data.
+These findings indicate that the proposed framework moves
+the field beyond incremental gains toward a new standard of
+proactive anomaly detection.
+Although the primary evaluation focused on mixing-related
+behaviors, the framework is readily extensible to other forms
+of manipulation such as phishing, layering, and pump-and-
+dump operations. This adaptability highlights its potential
+impact beyond academic benchmarks, providing a pathway
+toward real-time monitoring systems that support anti-money
+laundering, financial security, and regulatory compliance in
+rapidly evolving digital markets. In conclusion, HyPV-LEAD
+offers not only a methodological contribution but also a practi-
+cal foundation for transforming blockchain anomaly detection
+from reactive analysis to genuine early-warning systems.
+ACKNOWLEDGMENT
+This work was supported by the National Research Founda-
+tion of Korea (NRF) grant funded by the Korean government
+under the project “Socio-Technological Solutions for Bridging
+the AI Divide: A Blockchain and Federated Learning-Based
+AI Training Data Platform” (NRF-2024S1A5C3A02043653).
+REFERENCES
+[1] O. A. Obasun, “Blockchain as a disruptive force transforming indus-
+tries, redefining markets, and shaping the future of global economies,”
+American International Journal of Business Management , vol. 8, no. 4,
+pp. 124–156, 2025.
+[2] L. S. Lin, “Cryptocurrencies and AI-enabled organised fraud: Emerging
+risks and countermeasures,” in Proceedings of the 1st International
+Online Conference on Risk and Financial Management: Big Data,
+Artificial Intelligence, and Machine Learning in Finance , June 2025.
+[3] N. Lu, Y . Chang, W. Shi, and K. K. R. Choo, “Coinlayering: an
+efficient coin mixing scheme for large scale bitcoin transactions,” IEEE
+Transactions on Dependable and Secure Computing , vol. 19, no. 3,
+pp. 1974–1987, 2020.
+[4] V . Ravindranath, M. K. Nallakaruppan, M. L. Shri, B. Balusamy,
+and S. Bhattacharyya, “Evaluation of performance enhancement in
+ethereum fraud detection using oversampling techniques,” Applied Soft
+Computing, vol. 161, p. 111698, 2024.
+[5] X. Chen and W. Zhang, “Lstm-based anomaly detection in blockchain
+transactions,” in Proceedings of the AAAI Conference on Artificial
+Intelligence, pp. 234–242, AAAI, 2020.
+[6] H. Sun, Z. Liu, S. Wang, and H. Wang, “Adaptive attention-based graph
+representation learning to detect phishing accounts on the ethereum
+blockchain,” IEEE Transactions on Network Science and Engineering ,
+vol. 11, no. 3, pp. 2963–2975, 2024.
+[7] L. Grinsztajn, E. Oyallon, and G. Varoquaux, “Why do tree-based
+models still outperform deep learning on tabular data?,” arXiv preprint
+arXiv:2207.08815, 2022.
+[8] T. Mai, X. Zhang, and Y . Wang, “Understanding the limitations of
+self-supervised learning for tabular anomaly detection,” arXiv preprint
+arXiv:2309.08374, 2023.
+[9] D. Deuber and D. Schr ¨oder, “Coinjoin in the wild: An empirical analysis
+in dash,” in European Symposium on Research in Computer Security
+(ESORICS), (Cham), pp. 461–480, Springer International Publishing,
+Oct. 2021.
+[10] M. M ¨oser, R. B ¨ohme, and D. Breuker, “Tracing transactions across
+cryptocurrency ledgers,” in USENIX Security Symposium , pp. 707–720,
+USENIX Association, 2017.
+[11] J. Xu and B. Livshits, “Anatomy of a pump-and-dump scheme: Evidence
+from the cryptocurrency market,” in 28th USENIX Security Symposium ,
+USENIX Association, 2019.
+[12] T. Pham and S. Lee, “Anomaly detection in the bitcoin system–a network
+perspective,” in IEEE/ACM International Conference on Advances in
+Social Networks Analysis and Mining (ASONAM) , pp. 18–25, IEEE,
+2016.
+[13] P. Monamo, V . Marivate, and B. Twala, “Unsupervised learning for
+robust bitcoin fraud detection,” in Information Security for South Africa
+(ISSA), pp. 129–134, IEEE, 2016.
+[14] C. Lee, S. Maharjan, K. Ko, and J. W.-K. Hong, “Toward detecting
+illegal transactions on bitcoin using machine-learning methods,” inInter-
+national Conference on Blockchain and Trustworthy Systems (BlockSys),
+(Singapore), pp. 520–533, Springer Singapore, Dec. 2019.
+[15] W. Wei, J. Li, and Y . Cao, “Detecting illicit bitcoin transactions with
+machine learning,” Journal of Financial Crime, vol. 27, no. 3, pp. 1006–
+1021, 2020.
+[16] F. Kamalov, “Kernel density estimation based sampling for imbalanced
+class distribution,”Information Sciences, vol. 512, pp. 1192–1201, 2020.
+[17] P. Xenopoulos, “Introducing deepbalance: Random deep belief network
+ensembles to address class imbalance,” in 2017 IEEE International
+Conference on Big Data (Big Data) , pp. 3684–3689, IEEE, 2017.
+[18] F. A. Ghaleb, F. Saeed, M. Al-Sarem, S. N. Qasem, and T. Al-Hadhrami,
+“Ensemble synthesized minority oversampling-based generative adver-
+sarial networks and random forest algorithm for credit card fraud
+detection,” IEEE Access, vol. 11, pp. 89694–89710, 2023.
+[19] F. O. Aghware, A. A. Ojugo, W. Adigwe, C. C. Odiakaose, E. O.
+Ojei, N. C. Ashioba, and V . O. Geteloma, “Enhancing the random
+forest model via synthetic minority oversampling technique for credit-
+card fraud detection,” Journal of Computing Theories and Applications ,
+vol. 1, no. 4, pp. 407–420, 2024.
+[20] P. Komsrimorakot and T. Siriborvornratanakul, “Enhancing fraud detec-
+tion in imbalanced motor insurance datasets using cp-smote and random
+under-sampling,” Journal of Big Data , vol. 12, no. 1, p. 172, 2025.
+[21] J. Zhang, Y . Xu, and D. Houser, “Vulnerability of scale-free cryptocur-
+rency networks to double-spending attacks,” The European Journal of
+Finance, vol. 27, no. 12, pp. 1235–1249, 2021.
+[22] S. Begu ˇsi´c, Z. Kostanj ˇcar, H. E. Stanley, and B. Podobnik, “Scaling
+properties of extreme price fluctuations in bitcoin markets,” Physica A:
+Statistical Mechanics and its Applications , vol. 510, pp. 400–406, 2018.
+[23] R. S. Shah, A. Bhatia, A. Gandhi, and S. Mathur, “Bitcoin data analytics:
+Scalable techniques for transaction clustering and embedding genera-
+tion,” in 2021 International Conference on Communication Systems &
+Networks (COMSNETS), pp. 1–6, IEEE, 2021.
+[24] Y . Shi, “Hyperbolic self-supervised contrastive learning based network
+anomaly detection,” 2022. Preprint.
+[25] I. Chami, Z. Ying, C. R ´e, and J. Leskovec, “Hyperbolic graph convolu-
+tional neural networks,” in Advances in Neural Information Processing
+Systems, vol. 32, 2019.
+[26] S. A. Sadat, M. Y . Touahria Miliani, K. Hab El Hames, H. Seba, and
+M. Haddad, “Hyperbolic graph embeddings: A survey and an evaluation
+on anomaly detection,” 2024. Available at SSRN 5227954.
+[27] Z. Gu and O. Dib, “Enhancing fraud detection in the ethereum
+blockchain using ensemble learning,” PeerJ Computer Science, vol. 11,
+p. e2716, 2025.
+[28] F. Jumani and M. Raza, “Machine learning for anomaly detection in
+blockchain: A critical analysis, empirical validation, and future outlook,”
+Computers, vol. 14, no. 7, p. 247, 2025.
+[29] Y . Zhang, J. Xu, and L. Wang, “Attention-based lstm for imbalanced
+financial fraud detection,” IEEE Access , vol. 9, pp. 123456–123468,
+2021.
+[30] W. Zhang and J. Li, “Graph convolutional networks for fraud detection
+in financial transaction networks,”IEEE Transactions on Knowledge and
+Data Engineering, vol. 31, no. 8, pp. 1234–1247, 2019.
+[31] Z. Zhang, B. Luo, S. Lu, and B. He, “Live graph lab: Towards open,
+dynamic and real transaction graphs with nft,” in Advances in Neural
+Information Processing Systems , vol. 36, pp. 18769–18793, 2023.
+[32] B. Amiri, A. Haddadi, and K. F. Mojdehi, “A novel hybrid gcn-
+lstm algorithm for energy stock price prediction: leveraging temporal
+dynamics and inter-stock relationships,” IEEE Access, 2025.
+[33] M. Xie and L. Zhao, “Hybrid temporal-structural models for blockchain
+anomaly detection,” in Proceedings of the IEEE International Confer-
+ence on Data Mining (ICDM) , pp. 456–463, IEEE, 2022.
+

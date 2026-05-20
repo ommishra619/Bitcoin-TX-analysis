@@ -1,3 +1,89 @@
+def _sum_values(items):
+    total = 0.0
+    for item in items:
+        try:
+            total += float(item.get("value", 0) or 0)
+        except Exception:
+            continue
+    return total
+
+
+def extract_behavior_signals(parsed_txs):
+    """Extract aggregate suspiciousness signals from parsed transactions."""
+    signals = {
+        "tx_count": len(parsed_txs),
+        "small_output_tx_count": 0,
+        "equal_outputs_tx_count": 0,
+        "dusting_count": 0,
+        "big_incoming": 0,
+        "consolidation_count": 0,
+        "fan_out_count": 0,
+        "fan_in_count": 0,
+        "high_fee_count": 0,
+        "self_churn_count": 0,
+        "round_amount_count": 0,
+        "reused_output_addresses": 0,
+    }
+
+    recipients = {}
+
+    for tx in parsed_txs:
+        inputs = tx.get("inputs", [])
+        outputs = tx.get("outputs", [])
+        input_count = len(inputs)
+        output_count = len(outputs)
+
+        outs = [float(o.get("value", 0) or 0) for o in outputs]
+        if outs and max(outs) < 0.001 and len(outs) > 5:
+            signals["small_output_tx_count"] += 1
+
+        if len(outs) >= 3 and len(set(outs)) == 1:
+            signals["equal_outputs_tx_count"] += 1
+
+        tiny_outputs = [v for v in outs if 0 < v < 0.00001]
+        if len(tiny_outputs) >= 3:
+            signals["dusting_count"] += 1
+
+        for o in outputs:
+            value = float(o.get("value", 0) or 0)
+            if value >= 5:
+                signals["big_incoming"] += 1
+
+            addr = o.get("address")
+            if addr:
+                recipients.setdefault(addr, 0)
+                recipients[addr] += 1
+
+            # Round amounts can indicate scripted payouts.
+            if value > 0:
+                sat = int(round(value * 1e8))
+                if sat % 100000 == 0:
+                    signals["round_amount_count"] += 1
+
+        if input_count >= 4 and output_count <= 2:
+            signals["consolidation_count"] += 1
+        if input_count <= 2 and output_count >= 8:
+            signals["fan_out_count"] += 1
+        if input_count >= 8 and output_count <= 2:
+            signals["fan_in_count"] += 1
+
+        in_total = _sum_values(inputs)
+        out_total = _sum_values(outputs)
+        fee = max(0.0, in_total - out_total)
+        if in_total > 0:
+            fee_ratio = fee / in_total
+            if fee >= 0.001 or fee_ratio > 0.05:
+                signals["high_fee_count"] += 1
+
+        in_addrs = {i.get("address") for i in inputs if i.get("address")}
+        out_addrs = {o.get("address") for o in outputs if o.get("address")}
+        if in_addrs and out_addrs and (in_addrs & out_addrs):
+            signals["self_churn_count"] += 1
+
+    signals["reused_output_addresses"] = sum(1 for _, c in recipients.items() if c > 2)
+    return signals
+
+
 def classify_transaction(parsed_tx):
     """Classify a parsed transaction using simple heuristics.
 
@@ -9,13 +95,26 @@ def classify_transaction(parsed_tx):
 
     input_count = len(inputs)
     output_count = len(outputs)
-    output_values = [o.get("value") for o in outputs]
+    output_values = [float(o.get("value", 0) or 0) for o in outputs]
+    in_total = _sum_values(inputs)
+    out_total = _sum_values(outputs)
+    fee = max(0.0, in_total - out_total)
+    fee_ratio = (fee / in_total) if in_total > 0 else 0.0
+
+    in_addrs = {i.get("address") for i in inputs if i.get("address")}
+    out_addrs = {o.get("address") for o in outputs if o.get("address")}
 
     if input_count == 1 and output_count == 2:
         return "Simple payment (Possible change)"
 
     if input_count > 3 and output_count == 1:
         return "UTXO consolidation"
+
+    if input_count >= 8 and output_count <= 2:
+        return "Fan-in consolidation"
+
+    if input_count <= 2 and output_count >= 8:
+        return "Fan-out distribution"
 
     if output_count > 10:
         return "Possible exchange batch"
@@ -24,6 +123,12 @@ def classify_transaction(parsed_tx):
         unique_values = set(output_values)
         if len(unique_values) == 1:
             return "Possible CoinJoin (Equal outputs)"
+
+    if in_addrs and out_addrs and (in_addrs & out_addrs) and output_count <= 3:
+        return "Self-churn / change-heavy"
+
+    if fee >= 0.001 or fee_ratio > 0.05:
+        return "High-fee spend"
 
     return "Unclassified / Normal"
 
@@ -130,29 +235,16 @@ def classify_behavior(parsed_txs):
     avg_inputs = total_inputs / total_txs if total_txs else 0
     avg_outputs = total_outputs / total_txs if total_txs else 0
 
-    # Many small outputs -> possible mixer/tumbler
-    small_output_tx_count = 0
-    equal_outputs_tx_count = 0
-    dusting_count = 0
-    big_incoming = 0
-
-    for tx in parsed_txs:
-        outs = [o.get('value', 0) for o in tx.get('outputs', [])]
-        if not outs:
-            continue
-        if max(outs) < 0.001 and len(outs) > 5:
-            small_output_tx_count += 1
-        unique_vals = set(outs)
-        if len(outs) >= 3 and len(unique_vals) == 1:
-            equal_outputs_tx_count += 1
-        # dusting: many tiny outputs to many recipients
-        tiny_outputs = [v for v in outs if v > 0 and v < 0.00001]
-        if len(tiny_outputs) >= 3:
-            dusting_count += 1
-        # incoming large
-        for o in tx.get('outputs', []):
-            if o.get('value', 0) >= 5:
-                big_incoming += 1
+    signals = extract_behavior_signals(parsed_txs)
+    small_output_tx_count = signals.get('small_output_tx_count', 0)
+    equal_outputs_tx_count = signals.get('equal_outputs_tx_count', 0)
+    dusting_count = signals.get('dusting_count', 0)
+    big_incoming = signals.get('big_incoming', 0)
+    fan_out_count = signals.get('fan_out_count', 0)
+    fan_in_count = signals.get('fan_in_count', 0)
+    high_fee_count = signals.get('high_fee_count', 0)
+    self_churn_count = signals.get('self_churn_count', 0)
+    reused_output_addresses = signals.get('reused_output_addresses', 0)
 
     if small_output_tx_count > max(1, total_txs * 0.05):
         labels.append('Possible mixer/tumbler')
@@ -163,13 +255,25 @@ def classify_behavior(parsed_txs):
     if big_incoming > 0:
         labels.append('Large deposits (exchange/hot wallet)')
 
-    # consolidation: many inputs into single output
-    consolidation_count = 0
-    for tx in parsed_txs:
-        if len(tx.get('inputs', [])) >= 4 and len(tx.get('outputs', [])) <= 2:
-            consolidation_count += 1
+    # consolidation: many inputs into very few outputs
+    consolidation_count = signals.get('consolidation_count', 0)
     if consolidation_count > max(1, total_txs * 0.02):
         labels.append('UTXO consolidation')
+
+    if fan_out_count > max(1, total_txs * 0.03):
+        labels.append('Fan-out payout behavior')
+
+    if fan_in_count > max(1, total_txs * 0.03):
+        labels.append('Fan-in aggregation behavior')
+
+    if high_fee_count > max(1, total_txs * 0.02):
+        labels.append('Frequent high-fee spending')
+
+    if self_churn_count > max(1, total_txs * 0.05):
+        labels.append('Self-churn / change recycling')
+
+    if reused_output_addresses > max(3, total_txs * 0.05):
+        labels.append('Address reuse in outputs')
 
     # frequent small recurring payments -> subscription/merchant
     recipients = {}

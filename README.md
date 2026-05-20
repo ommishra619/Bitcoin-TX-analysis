@@ -109,3 +109,30 @@ peeling_chains: []
 Graph image saved to graph.png
 ```
 
+## API Usage (FastAPI)
+
+The project now includes a backend API server in `app.py`.
+
+Run API server:
+
+```powershell
+& .\.venv\Scripts\python.exe app.py
+```
+
+API endpoints:
+
+- `GET /api/health`
+- `GET /api/price?days=30`
+- `POST /api/analyze`
+
+Interactive docs are available at `http://localhost:8000/docs`.
+
+For quick examples, see `API_QUICKSTART.md`.
+
+## Testing
+
+Run all tests:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pytest -q
+```
