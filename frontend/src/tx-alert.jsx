@@ -352,6 +352,7 @@ function TxAlertPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
+  const [showIntro, setShowIntro] = useState(true);
 
   const items = useMemo(() => parseInputItems(rawInput), [rawInput]);
   const parsed = useMemo(() => classifyInput(items), [items]);
@@ -402,7 +403,7 @@ function TxAlertPage() {
           : {
               txids: parsed.txids,
               include_graph: true,
-              focus_address: focusAddress.trim() || undefined
+              focus_address: undefined
             };
 
       const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -478,6 +479,60 @@ function TxAlertPage() {
 
   return (
     <div className="wrap tx-page">
+      {/* Intro Modal Overlay */}
+      {showIntro && (
+        <div className="alert-modal-overlay" onClick={() => setShowIntro(false)}>
+          <div className="alert-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="alert-modal-header">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: 'var(--accent)', filter: 'drop-shadow(0 0 6px rgba(37, 194, 255, 0.5))' }}>
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <h3>Early Alerts Dashboard Guide</h3>
+            </div>
+            <div className="alert-modal-body">
+              <p>
+                Welcome to the Early Warning System. Trace transaction flows, identify peeling chains, and predict state anomalies in the Bitcoin network.
+              </p>
+              
+              <div className="alert-modal-input-list">
+                <strong>What you can enter:</strong>
+                <ul>
+                  <li>
+                    <strong>Bitcoin Address:</strong> Paste a single wallet address (e.g., <code>bc1...</code>) to trace wallet counterparty interactions.
+                  </li>
+                  <li>
+                    <strong>Transaction IDs (TXIDs):</strong> Paste one or multiple 64-character transaction hashes (separated by spaces or commas).
+                  </li>
+                </ul>
+              </div>
+
+              <p style={{ marginBottom: 0 }}>
+                💡 <strong>Don't have an address or TXID?</strong> Click the button below to test the engine with synthesized peel-chain activity and render the transaction graph instantly!
+              </p>
+            </div>
+            <div className="alert-modal-actions">
+              <button 
+                className="alert-modal-btn-primary" 
+                onClick={() => {
+                  setShowIntro(false);
+                  analyzeFakeTxs();
+                }}
+              >
+                Test with Synthesized Data
+              </button>
+              <button 
+                className="alert-modal-btn-secondary" 
+                onClick={() => setShowIntro(false)}
+              >
+                Enter Custom Input
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="title">
         <div>
           <h1>Transaction ID Early Alert Page</h1>

@@ -118,6 +118,75 @@ function App() {
     [currency]
   );
 
+  const sentiment = useMemo(() => {
+    if (prices.length < 26) return null;
+
+    const latestPrice = prices[prices.length - 1];
+    
+    // Calculate SMA
+    const smaVals = sma(prices, 20);
+    const latestSma = smaVals[smaVals.length - 1];
+
+    // Calculate EMA
+    const emaVals = ema(prices, 20);
+    const latestEma = emaVals[emaVals.length - 1];
+
+    // Calculate RSI
+    const rsiVals = rsi(prices, 14);
+    const latestRsi = rsiVals[rsiVals.length - 1];
+
+    // Calculate MACD
+    const { macdLine, signalLine } = macd(prices);
+    const latestMacd = macdLine[macdLine.length - 1];
+    const latestSignal = signalLine[signalLine.length - 1];
+
+    // Evaluate conditions
+    const isEmaBullish = latestPrice > latestEma;
+    const isSmaBullish = latestPrice > latestSma;
+    
+    let rsiStatus = "Neutral";
+    let rsiScore = 0;
+    if (latestRsi > 70) { rsiStatus = "Overbought"; rsiScore = -1; }
+    else if (latestRsi < 30) { rsiStatus = "Oversold"; rsiScore = 1; }
+
+    const isMacdBullish = latestMacd > latestSignal;
+    
+    // Calculate overall consensus score
+    let score = 0;
+    if (isEmaBullish) score += 1; else score -= 1;
+    if (isSmaBullish) score += 1; else score -= 1;
+    if (isMacdBullish) score += 1; else score -= 1;
+    score += rsiScore;
+
+    let consensus = "Neutral";
+    let consensusClass = "sentiment-neutral";
+    if (score >= 2) { consensus = "Strong Buy"; consensusClass = "sentiment-strong-buy"; }
+    else if (score === 1) { consensus = "Buy"; consensusClass = "sentiment-buy"; }
+    else if (score === -1) { consensus = "Sell"; consensusClass = "sentiment-sell"; }
+    else if (score <= -2) { consensus = "Strong Sell"; consensusClass = "sentiment-strong-sell"; }
+
+    const highPrice = Math.max(...prices);
+    const lowPrice = Math.min(...prices);
+
+    return {
+      latestPrice,
+      latestSma,
+      latestEma,
+      latestRsi,
+      latestMacd,
+      latestSignal,
+      highPrice,
+      lowPrice,
+      isEmaBullish,
+      isSmaBullish,
+      rsiStatus,
+      isMacdBullish,
+      consensus,
+      consensusClass,
+      score
+    };
+  }, [prices]);
+
   async function fetchData() {
     setError("");
     setStatus(`Loading ${days}d BTC data in ${currency.toUpperCase()}...`);
@@ -244,22 +313,35 @@ function App() {
           {
             label: `BTC (${currency.toUpperCase()})`,
             data: prices,
-            borderColor: "#6ee7ff",
+            borderColor: "#25c2ff",
+            borderWidth: 2,
             pointRadius: 0,
-            tension: 0.2
+            tension: 0.15,
+            fill: true,
+            backgroundColor: (context) => {
+              const chart = context.chart;
+              const {ctx, chartArea} = chart;
+              if (!chartArea) return null;
+              const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+              gradient.addColorStop(0, 'rgba(37, 194, 255, 0.2)');
+              gradient.addColorStop(1, 'rgba(37, 194, 255, 0.0)');
+              return gradient;
+            }
           },
           {
             label: "SMA(20)",
             data: sma20,
-            borderColor: "#f5a623",
+            borderColor: "#f59e0b",
+            borderWidth: 1.5,
             pointRadius: 0,
-            borderDash: [6, 4],
+            borderDash: [5, 4],
             hidden: !showSma
           },
           {
             label: "EMA(20)",
             data: ema20,
-            borderColor: "#d946ef",
+            borderColor: "#ec4899",
+            borderWidth: 1.5,
             pointRadius: 0,
             hidden: !showEma
           },
@@ -267,7 +349,7 @@ function App() {
             label: "Peaks",
             data: peaks,
             parsing: false,
-            pointRadius: 4,
+            pointRadius: 5,
             showLine: false,
             borderColor: "#ef4444",
             backgroundColor: "#ef4444"
@@ -276,10 +358,10 @@ function App() {
             label: "Valleys",
             data: valleys,
             parsing: false,
-            pointRadius: 4,
+            pointRadius: 5,
             showLine: false,
-            borderColor: "#16a34a",
-            backgroundColor: "#16a34a"
+            borderColor: "#10b981",
+            backgroundColor: "#10b981"
           }
         ]
       },
@@ -288,7 +370,7 @@ function App() {
         maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
         plugins: {
-          legend: { labels: { color: "#dbe7ff" } },
+          legend: { labels: { color: "#dbe7ff", font: { family: "Plus Jakarta Sans" } } },
           tooltip: {
             callbacks: {
               label: (ctx) => `${ctx.dataset.label}: ${money.format(ctx.parsed.y)}`
@@ -296,8 +378,8 @@ function App() {
           }
         },
         scales: {
-          x: { ticks: { color: "#94a3b8", maxTicksLimit: 10 }, grid: { color: "rgba(148,163,184,0.12)" } },
-          y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.12)" } }
+          x: { ticks: { color: "#94a3b8", maxTicksLimit: 10, font: { family: "Plus Jakarta Sans" } }, grid: { color: "rgba(148,163,184,0.05)" } },
+          y: { ticks: { color: "#94a3b8", font: { family: "Plus Jakarta Sans" } }, grid: { color: "rgba(148,163,184,0.05)" } }
         },
         animation: {
           onComplete: () => redrawOverlay()
@@ -319,16 +401,33 @@ function App() {
       data: {
         labels,
         datasets: [
-          { label: "RSI(14)", data: rsiData, borderColor: "#22c55e", pointRadius: 0, hidden: !showRsi },
-          { label: "Overbought 70", data: labels.map(() => 70), borderColor: "#ef4444", pointRadius: 0, borderDash: [5, 5] },
-          { label: "Oversold 30", data: labels.map(() => 30), borderColor: "#3b82f6", pointRadius: 0, borderDash: [5, 5] }
+          { 
+            label: "RSI(14)", 
+            data: rsiData, 
+            borderColor: "#10b981", 
+            borderWidth: 2,
+            pointRadius: 0, 
+            hidden: !showRsi,
+            fill: true,
+            backgroundColor: (context) => {
+              const chart = context.chart;
+              const {ctx, chartArea} = chart;
+              if (!chartArea) return null;
+              const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+              gradient.addColorStop(0, 'rgba(16, 185, 129, 0.08)');
+              gradient.addColorStop(1, 'rgba(16, 185, 129, 0.00)');
+              return gradient;
+            }
+          },
+          { label: "Overbought 70", data: labels.map(() => 70), borderColor: "rgba(239, 68, 68, 0.4)", pointRadius: 0, borderDash: [4, 4] },
+          { label: "Oversold 30", data: labels.map(() => 30), borderColor: "rgba(59, 130, 246, 0.4)", pointRadius: 0, borderDash: [4, 4] }
         ]
       },
       options: {
-        plugins: { legend: { labels: { color: "#dbe7ff" } } },
+        plugins: { legend: { labels: { color: "#dbe7ff", font: { family: "Plus Jakarta Sans" } } } },
         scales: {
           x: { display: false },
-          y: { min: 0, max: 100, ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.12)" } }
+          y: { min: 0, max: 100, ticks: { color: "#94a3b8", font: { family: "Plus Jakarta Sans" } }, grid: { color: "rgba(148,163,184,0.05)" } }
         }
       }
     });
@@ -350,18 +449,18 @@ function App() {
             type: "bar",
             label: "Histogram",
             data: hist,
-            backgroundColor: hist.map((v) => (v >= 0 ? "rgba(34,197,94,0.45)" : "rgba(239,68,68,0.45)")),
+            backgroundColor: hist.map((v) => (v >= 0 ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)")),
             hidden: !showMacd
           },
-          { type: "line", label: "MACD", data: macdLine, borderColor: "#f59e0b", pointRadius: 0, hidden: !showMacd },
-          { type: "line", label: "Signal", data: signalLine, borderColor: "#60a5fa", pointRadius: 0, hidden: !showMacd }
+          { type: "line", label: "MACD", data: macdLine, borderColor: "#f59e0b", borderWidth: 1.5, pointRadius: 0, hidden: !showMacd },
+          { type: "line", label: "Signal", data: signalLine, borderColor: "#3b82f6", borderWidth: 1.5, pointRadius: 0, hidden: !showMacd }
         ]
       },
       options: {
-        plugins: { legend: { labels: { color: "#dbe7ff" } } },
+        plugins: { legend: { labels: { color: "#dbe7ff", font: { family: "Plus Jakarta Sans" } } } },
         scales: {
           x: { display: false },
-          y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.12)" } }
+          y: { ticks: { color: "#94a3b8", font: { family: "Plus Jakarta Sans" } }, grid: { color: "rgba(148,163,184,0.05)" } }
         }
       }
     });
@@ -432,6 +531,31 @@ function App() {
           Interactive chart with indicators, trendlines, annotations, pattern markers, and currency switching.
         </div>
       </div>
+
+      {sentiment && (
+        <div className="metrics-grid">
+          <div className="metric-card">
+            <div className="metric-label">Spot Price</div>
+            <div className="metric-value value-glow">{money.format(sentiment.latestPrice)}</div>
+            <div className="metric-trend green">Live Market Spot</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">Timeframe High</div>
+            <div className="metric-value">{money.format(sentiment.highPrice)}</div>
+            <div className="metric-trend green">Timeframe Peak</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">Timeframe Low</div>
+            <div className="metric-value">{money.format(sentiment.lowPrice)}</div>
+            <div className="metric-trend red">Timeframe Floor</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-label">Market Consensus</div>
+            <div className={`metric-value ${sentiment.consensusClass}`}>{sentiment.consensus}</div>
+            <div className="metric-trend">Combined TA Signal</div>
+          </div>
+        </div>
+      )}
 
       <div className="card controls">
         <div className="span-6">
@@ -517,6 +641,45 @@ function App() {
           ))}
         </ul>
       </div>
+
+      {sentiment && (
+        <div className="card forensics-panel">
+          <div className="label" style={{ marginBottom: "16px" }}>Technical Indicator Forensics</div>
+          <div className="forensics-grid">
+            <div className="forensics-item">
+              <span className="item-title">EMA(20) Trend Analysis</span>
+              <span className={`item-value ${sentiment.isEmaBullish ? "green" : "red"}`}>
+                {sentiment.isEmaBullish ? "🟢 Bullish Trend" : "🔴 Bearish Trend"}
+              </span>
+              <p className="item-desc">Price is trading {sentiment.isEmaBullish ? "above" : "below"} the 20-period Exponential Moving Average ({money.format(sentiment.latestEma)}).</p>
+            </div>
+            
+            <div className="forensics-item">
+              <span className="item-title">SMA(20) Support/Resistance</span>
+              <span className={`item-value ${sentiment.isSmaBullish ? "green" : "red"}`}>
+                {sentiment.isSmaBullish ? "🟢 Above Support" : "🔴 Below Resistance"}
+              </span>
+              <p className="item-desc">Price is trading {sentiment.isSmaBullish ? "above" : "below"} the Simple Moving Average ({money.format(sentiment.latestSma)}).</p>
+            </div>
+
+            <div className="forensics-item">
+              <span className="item-title">RSI Momentum Oscillator</span>
+              <span className={`item-value ${sentiment.rsiStatus === "Overbought" ? "red" : sentiment.rsiStatus === "Oversold" ? "green" : "blue"}`}>
+                📊 {sentiment.latestRsi ? `${sentiment.latestRsi.toFixed(2)} (${sentiment.rsiStatus})` : "N/A"}
+              </span>
+              <p className="item-desc">RSI value is {sentiment.rsiStatus.toLowerCase()}. Values over 70 imply overbought conditions, while values under 30 imply oversold.</p>
+            </div>
+
+            <div className="forensics-item">
+              <span className="item-title">MACD Trend Momentum</span>
+              <span className={`item-value ${sentiment.isMacdBullish ? "green" : "red"}`}>
+                ⚡ {sentiment.isMacdBullish ? "Bullish Momentum" : "Bearish Momentum"}
+              </span>
+              <p className="item-desc">MACD line ({sentiment.latestMacd ? sentiment.latestMacd.toFixed(2) : "N/A"}) is trading {sentiment.isMacdBullish ? "above" : "below"} the signal line ({sentiment.latestSignal ? sentiment.latestSignal.toFixed(2) : "N/A"}).</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
